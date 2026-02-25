@@ -2,3 +2,9 @@
 /shelf/
 /workspace.xml
 /.env
+downloads/photos/*
+downloads/videos/*
+downloads/documents/*
+!downloads/photos/README.md
+!downloads/videos/README.md
+!downloads/documents/README.md
