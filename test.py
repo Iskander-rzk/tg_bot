@@ -1,8 +1,22 @@
 import telebot
-import time
+import os
+from dotenv import load_dotenv
 from datetime import datetime
 
-bot = telebot.TeleBot('733261376:AAH4AqKJQgT_WNEserRXM-qzhKVNZHYbGmI')
+load_dotenv()
+Token = os.getenv("TOKEN")
+
+
+bot = telebot.TeleBot(Token)
+
+#Настройка папок
+Base_Dir = os.path.dirname(os.path.abspath(__file__))
+Downloads_Dir = os.path.join(Base_Dir, 'downloads')
+
+Photo_Dir = os.path.join(Downloads_Dir, 'photo')
+Video_Dir = os.path.join(Downloads_Dir, 'video')
+Docs_Dir = os.path.join(Downloads_Dir, 'documents')
+
 
 @bot.message_handler(commands=['start'])
 def start_command(message):
@@ -21,8 +35,9 @@ def handle_photo(message):
 
     timestamp = datetime.now().strftime("%Y-%m-%d_-%H-%M-%S")
     photoname = f"received_image_{timestamp}.jpg"
+    save_path = os.path.join(Photo_Dir, photoname)
 
-    with open(photoname, 'wb') as new_file:
+    with open(save_path, 'wb') as new_file:
         new_file.write(downloaded_file)
 
     bot.reply_to(message, "Image in hostage")
@@ -40,8 +55,9 @@ def handle_video(message):
 
     timestamp = datetime.now().strftime("%Y-%m-%d_-%H-%M-%S")
     videoname = f"recived_video_{timestamp}.mp4"
+    save_path = os.path.join(Photo_Dir, videoname)
 
-    with open(videoname, 'wb') as new_file:
+    with open(save_path, 'wb') as new_file:
         new_file.write(downloaded_file)
 
     bot.reply_to(message, "save your stupid video")
@@ -52,6 +68,19 @@ def sendvideo(message):
     video = open(" ", 'rb')
     bot.send_video(message.chat.id, video)
 
+
+@bot.message_handler(content_types=['document'])
+def handle_document(message):
+    file_info = bot.get_file(message.document.file_id)
+    downloaded_file = bot.download_file(file_info.file_path)
+
+    timestamp = datetime.now().strftime("%Y-%m-%d_-%H-%M-%S")
+
+    
+    with open(message.document.file_name, 'wb') as new_file:
+        new_file.write(downloaded_file)
+
+    bot.reply_to(message, "save epstein files")
 
 
 
