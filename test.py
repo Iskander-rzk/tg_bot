@@ -1,12 +1,16 @@
 import telebot
 import os
+import logging
+import functools
 from dotenv import load_dotenv
 from datetime import datetime
-from telebot import types
+
 
 load_dotenv()
 Token = os.getenv("TOKEN")
 
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+logger = logging.getLogger(__name__)
 
 bot = telebot.TeleBot(Token)
 
@@ -19,9 +23,65 @@ Video_Dir = os.path.join(Downloads_Dir, 'video')
 Docs_Dir = os.path.join(Downloads_Dir, 'documents')
 
 
-#@bot.message_handler(commands=['start'])
-#def start_command(message):
-#    bot.reply_to(message,"Hi, im bot Kolbasenko")
+#функция для обработок ошибок
+def handler_telegram_errors(func):
+    @functools.wraps(func)
+    def wrapper(message, bot=None, *args, **kwargs):
+        current_bot = bot or globals().get('bot')
+        logger.info(f'Starting {func.__name__} for user {message.chat.id}')
+
+        try:
+            result = func(message, *args, **kwargs)
+
+            logger.info(f"Successful completed {func.__name__ } for user {message.chat.id}")
+            return result
+        except telebot.apihelper.ApiException as e:
+            logger.error(f"Telegram API errror: {e}")
+            try:
+                bot.send_message(message.chat.id, 'Message failed to send')
+            except:
+                pass
+        except Exception as e:
+            logger.exception(f'Unexpected error: {e}')
+            try:
+                bot.send_message(message.chat.id, 'Unkown error')
+            except:
+                pass
+    return wrapper
+
+
+@bot.message_handler(commands=['start'])
+@handler_telegram_errors
+def start_command(message):
+    bot.reply_to(message, "Hi, im bot Kolbasenko")
+
+
+
+
+
+'''
+@bot.message_handler(commands=['start'])
+def start_command(message):
+    try:
+        #логгируем получение комнды /start
+        logger.info('get command /start from user %s', message.chat.id)
+        #отправляем приветсвие пользователю
+        bot.reply_to(message,"Hi, im bot Kolbasenko")
+    except telebot.apihelper.ApiException as e:
+        #логируем ошибкупри взаимодействии c API Telegram
+        logger.error('Message failed to send %s', e)
+        bot.send_message(message.chat.id, 'Error sending message. Please try later.')
+    except Exception as e:
+        logger.exception('Unkown error: %s', e)
+        bot.send_message(message.chat.id, "Unkown error. Please try later")
+    else:
+        logger.info('Message successful send to user %s', message.chat.id)
+    finally:
+        logger.info("End process command /start for user %s", message.chat.id)
+
+'''
+
+
 
 
 @bot.message_handler(commands=['help', 'about'])
@@ -109,7 +169,7 @@ def geo_location(message):
 
 
 
-
+'''
 @bot.message_handler(commands=['start'])
 def start_command(message):
     bot.reply_to(message, "hi, what are hell do you want!?")
@@ -124,11 +184,48 @@ def start_command(message):
     bot.send_message(message.chat.id, 'Choase the pill Neo', reply_markup=keyboard)
 
 
+@bot.callback_query_handler(func=lambda call: True)
+def handler(call):
+    bot.answer_callback_query(call.id)
+    if call.data == 'data1':
+        bot.send_message(call.message.chat.id, "Это была барбариска")
+    elif call.data == 'data2':
+        bot.send_message(call.message.chat.id, 'Это была стиральная капсула')
+        
+        
+
+@bot.message_handler(commands=['start'])
+def start_command(message):
+    bot.reply_to(message, 'what are hell do you want!?')
+
+    keyboard = types.ReplyKeyboardMarkup(row_width=2, resize_keyboard=True)
+
+    button1 = types.KeyboardButton('Red')
+    button2 = types.KeyboardButton('Blue')
+
+    keyboard.add(button1, button2)
+
+    bot.send_message(message.chat.id, 'Chose the pill:', reply_markup=keyboard)
 
 
-#@bot.message_handler(content_types=['text'])
-#def handle_text(message):
-#    response = f"Вы написали: {message.text}"
-#    bot.send_message(message.chat.id, response)
+@bot.message_handler(content_types=['text'])
+def handler_text(message):
+    if message.text == 'Red':
+        bot.send_message(message.chat.id, 'Это была барбариска')
+    elif message.text == 'Blue':
+        bot.send_message(message.chat.id, 'Это была стиральная капсула')
+    else:
+        bot.send_message(message.chat.id, 'Это был мухамор')
+
+
+
+
+
+@bot.message_handler(content_types=['text'])
+def handle_text(message):
+    response = f"Вы написали: {message.text}"
+    bot.send_message(message.chat.id, response)
+'''
+
 
 bot.polling()
