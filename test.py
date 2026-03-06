@@ -27,26 +27,63 @@ Docs_Dir = os.path.join(Downloads_Dir, 'documents')
 def handler_telegram_errors(func):
     @functools.wraps(func)
     def wrapper(message, bot=None, *args, **kwargs):
-        current_bot = bot or globals().get('bot')
-        logger.info(f'Starting {func.__name__} for user {message.chat.id}')
+        user_id = message.from_user.id if message.from_user else 'Unknown'
+        chat_id = message.chat.id if message.chat else 'Unkown'
+        logger.info(f'Starting {func.__name__} | User {user_id} | Chat: {chat_id}')
 
         try:
             result = func(message, *args, **kwargs)
-
-            logger.info(f"Successful completed {func.__name__ } for user {message.chat.id}")
+            logger.info(f"Successful completed {func.__name__ } | User {user_id} | Chat: {chat_id}")
             return result
+
+        except telebot.apihelper.ApiTelegramException as e:
+            error_code = getattr(e, 'error_code', 'unknown')
+            error_desc = getattr(e, 'description', str(e))
+
+            if error_code == 403:
+                logger.warning(f"User {user_id} block the bot")
+            elif error_code == 429:
+                logger.warning(f"Too may requests for user {user_id}")
+            elif error_code == 400:
+                logger.warning(f"Bad request: {error_desc}")
+            else:
+                logger.error(f"Telegram API error: {error_code} : {error_desc}")
+
+            try:
+                bot.send_message(chat_id, 'Error, try later')
+            except:
+                pass
+
         except telebot.apihelper.ApiException as e:
-            logger.error(f"Telegram API errror: {e}")
+            logger.error(f"Api error in {func.__name__} : {e}")
             try:
-                bot.send_message(message.chat.id, 'Message failed to send')
+                bot.send_message(chat_id, "Error to connect telegram")
             except:
                 pass
+
+        except ValueError as e:
+            logger.warning(f'Validation error in {func.__name__} : {e}')
+            try:
+                bot.send_message(chat_id, f"Error with data: {e}")
+            except:
+                pass
+
+        except FileNotFoundError as e:
+            logger.error(f'File nor found in {func.__name__} : {e}')
+            try:
+                bot.send_messge(chat_id, "File not found")
+            except:
+                pass
+
         except Exception as e:
-            logger.exception(f'Unexpected error: {e}')
+            logger.exception(f"Critical error in {func.__name__} : {e}")
             try:
-                bot.send_message(message.chat.id, 'Unkown error')
+                bot.send_message(chat_id, "Critical error")
             except:
                 pass
+
+        finally:
+          logger.info(f'End {func.__name__} | User: {user_id} | Chat id: {chat_id}')
     return wrapper
 
 
@@ -61,6 +98,7 @@ def start_command(message):
 
 '''
 @bot.message_handler(commands=['start'])
+@handler_telegram_errors
 def start_command(message):
     try:
         #логгируем получение комнды /start
@@ -85,6 +123,7 @@ def start_command(message):
 
 
 @bot.message_handler(commands=['help', 'about'])
+@handler_telegram_errors
 def help_command(message):
     bot.reply_to(message, "Больште города")
 
@@ -92,28 +131,47 @@ def help_command(message):
 
 
 @bot.message_handler(content_types=['photo'])
+@handler_telegram_errors
 def handle_photo(message):
-    file_info = bot.get_file(message.photo[-1].file_id)
-    downloaded_file = bot.download_file(file_info.file_path)
+    try:
+        file_info = bot.get_file(message.photo[-1].file_id)
+        downloaded_file = bot.download_file(file_info.file_path)
 
-    timestamp = datetime.now().strftime("%Y-%m-%d_-%H-%M-%S")
-    save_path = os.path.join(Photo_Dir, f"received_image_{message.from_user.id}_{timestamp}.jpg")
+        timestamp = datetime.now().strftime("%Y-%m-%d_-%H-%M-%S")
+        filename = f"received_image_{message.from_user.id}_{timestamp}.jpg"
+        save_path = os.path.join(Photo_Dir, filename)
 
-    with open(save_path, 'wb') as new_file:
-        new_file.write(downloaded_file)
-    bot.reply_to(message, "Image in hostage")
+        with open(save_path, 'wb') as new_file:
+            new_file.write(downloaded_file)
+        bot.reply_to(message, "Image in hostage")
+        logger.info(f'Photo save as: {filename}')
+
+
+
+    except Exception as e:
+        logger.error(f"Error in photo handler: {e}")
+        raise
 
 
 @bot.message_handler(commands=['sendphoto'])
+@handler_telegram_errors
 def send_photo(message):
-    photo = open('/home/alex/PycharmProjects/tg_bot/received_image.jpg', 'rb')
-    bot.send_photo(message.chat.id, photo)
+    photos = os.listdir(Photo_Dir)
 
+    if not photos:
+        bot.reply_to(message, "You don't have saved photos")
+        return
+
+    latest_photo = sorted(photos)[-1]
+    photo_path = os.path.join(Photo_Dir, latest_photo)
+    with open(photo_path, 'rb') as photo:
+        bot.send_photo(message.chat.id, photo, caption={latest_photo})
 
 
 
 
 @bot.message_handler(conent_types=["video"])
+@handler_telegram_errors
 def handle_video(message):
     file_info = bot.get_file(message.video.file_id)
     downloaded_file = bot.download_file(file_info.file_path)
@@ -128,6 +186,7 @@ def handle_video(message):
 
 
 @bot.message_handler(commands=['sendvideo'])
+@handler_telegram_errors
 def send_video(message):
     video = open(" ", 'rb')
     bot.send_video(message.chat.id, video)
@@ -137,6 +196,7 @@ def send_video(message):
 
 
 @bot.message_handler(content_types=['document'])
+@handler_telegram_errors
 def handle_document(message):
     file_info = bot.get_file(message.document.file_id)
     downloaded_file = bot.download_file(file_info.file_path)
@@ -151,12 +211,14 @@ def handle_document(message):
 
 
 @bot.message_handler(commands=['senddocuments'])
+@handler_telegram_errors
 def send_document(message):
     document = open('', 'rb')
     bot.send_document(message.chat.id, document)
 
 
 @bot.message_handler(content_types=['location'])
+@handler_telegram_errors
 def geo_location(message):
     gif = open('/home/alex/PycharmProjects/tg_bot/clash-royale-rocket.gif', 'rb')
     bot.send_animation(message.chat.id, gif)
